@@ -1,0 +1,4 @@
+fastapi>=0.100
+uvicorn>=0.22
+playwright>=1.40
+websocket-client>=1.6
