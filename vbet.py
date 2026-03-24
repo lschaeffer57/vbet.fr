@@ -61,24 +61,50 @@ def save_session(cookie: str, site_id: str):
     )
 
 def load_session() -> tuple[str, str]:
-    """Retourne (cookie, site_id) depuis l'env (Railway) ou le fichier local."""
-    # Priorité env Railway
-    cookie_env = (os.environ.get("VBET_COOKIE") or "").strip()
+    """Retourne (cookie, site_id) depuis l'env (Railway) ou le fichier local.
+    Persiste toujours dans le fichier session pour que swarm_client puisse le lire.
+    """
     site_id_env = (os.environ.get("VBET_SITE_ID") or "").strip()
+
+    # 1. VBET_COOKIE direct
+    cookie_env = (os.environ.get("VBET_COOKIE") or "").strip()
     if cookie_env:
+        save_session(cookie_env, site_id_env)
         return cookie_env, site_id_env
 
+    # 2. VBET_STORAGE_STATE_B64 → extraire les cookies
+    b64 = (os.environ.get("VBET_STORAGE_STATE_B64") or "").strip()
+    if b64:
+        try:
+            state   = json.loads(base64.b64decode(b64).decode("utf-8"))
+            cookies = state.get("cookies") or []
+            parts   = [f'{c["name"]}={c["value"]}' for c in cookies
+                       if c.get("name") and c.get("value") is not None]
+            cookie  = "; ".join(parts)
+            if cookie:
+                save_session(cookie, site_id_env)
+                return cookie, site_id_env
+        except Exception as e:
+            print(f"[vbet] load_session: erreur VBET_STORAGE_STATE_B64 — {e}", flush=True)
+
+    # 3. Fichier local
     if not session_path().exists():
         raise FileNotFoundError(
             f"Session absente : {session_path()}. "
             "Lancez : python vbet.py capture --headed --manual"
         )
-    data = json.loads(session_path().read_text(encoding="utf-8"))
+    data    = json.loads(session_path().read_text(encoding="utf-8"))
     cookie  = (data.get("cookie")  or "").strip()
     site_id = (data.get("site_id") or "").strip() or site_id_env
     if not cookie:
         raise ValueError("Clé 'cookie' vide dans le fichier session")
     return cookie, site_id
+
+def _session_available() -> bool:
+    """True si une session est disponible (env ou fichier)."""
+    if (os.environ.get("VBET_COOKIE") or os.environ.get("VBET_STORAGE_STATE_B64") or "").strip():
+        return True
+    return session_path().exists()
 
 def _cookie_header_from_playwright_context(ctx) -> str:
     parts = []
@@ -498,7 +524,7 @@ def cmd_serve():
 
     # Boucle fetch continue
     def _auto_fetch_loop():
-        while not session_path().exists():
+        while not _session_available():
             time.sleep(2)
         time.sleep(2)
         cooldown = float(os.environ.get("VBET_FETCH_COOLDOWN_S", "1"))
