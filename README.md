@@ -1,81 +1,61 @@
 # Vbet
 
-Scraper de cotes vbet.fr — même architecture que daznbet.fr (Swarm WebSocket).
-Le `site_id` vbet.fr est **auto-détecté** lors de la première capture Playwright.
+Scraper de cotes vbet.fr — Swarm WebSocket (`wss://swarm-2.vbet.fr/`), `site_id=277`.
+
+**Production Railway :** `https://vbet-production.up.railway.app`
+
+---
+
+## API
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /odds` | Toutes les cotes (JSON) |
+| `GET /health` | État du cache |
+| `GET /session/status` | Cookie Swarm + site_id |
+| `POST /session` | Injecter une session (Bearer) |
+| `POST /session/refresh` | Relancer capture xvfb (Bearer) |
+| `POST /fetch` | Fetch manuel (Bearer) |
 
 ---
 
 ## Lancer en local
 
-### 1. Environnement (une seule fois)
-
 ```bash
-cd /Users/Dominique/Desktop/Vbet
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -m playwright install chromium
+
+# Capturer session (ouvre Chrome, laisse charger vbet.fr)
+python vbet.py capture --headed
+
+# Fetch cotes via Swarm WebSocket
+VBET_SITE_ID=277 python vbet.py fast --mode full
+
+# Serveur API local
+VBET_SITE_ID=277 python vbet.py serve
 ```
-
-### 2. Capturer la session (une seule fois)
-
-Lance le navigateur, connecte-toi sur vbet.fr, puis ferme :
-
-```bash
-python vbet.py capture --headed --manual
-```
-
-Le `site_id` est **automatiquement détecté** depuis le trafic WebSocket du navigateur et sauvegardé dans `data/vbet_session.json`.
-
-### 3. API locale
-
-```bash
-python vbet.py serve
-```
-
-Endpoints sur `http://127.0.0.1:8003` :
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /odds` | Cotes (sports / compétitions / matchs) |
-| `GET /health` | État du cache |
-| `GET /session/status` | Cookie Swarm + site_id détecté |
 
 ---
 
 ## Déploiement Railway
 
-**1. Capturer en local puis exporter :**
-
-```bash
-python vbet.py capture --headed --manual
-./scripts/export_storage.sh
-```
-
-**2. Variables Railway :**
-
-| Variable | Description |
-|----------|-------------|
-| `VBET_STORAGE_STATE_B64` | Valeur issue de `export_storage.sh` |
-| `VBET_SITE_ID` | Auto-détecté à la capture (affiché dans les logs) |
-| `VBET_SERVE_TOKEN` | Token Bearer optionnel |
-
-**3. Déployer :**
-
 ```bash
 git push origin main   # Railway redéploie automatiquement
 ```
 
----
+### Variables Railway
 
-## Variables d'environnement
-
-| Variable | Défaut | Description |
+| Variable | Valeur | Description |
 |----------|--------|-------------|
-| `VBET_STORAGE_STATE_B64` | — | Cookies Playwright (Railway) |
-| `VBET_SITE_ID` | auto | Site ID Swarm (détecté à la capture) |
-| `VBET_COOKIE` | — | Chaîne cookie brute (alternative) |
-| `VBET_FETCH_COOLDOWN_S` | `1` | Délai entre cycles |
-| `VBET_CAPTURE_WAIT_MS` | `15000` | Attente après chargement page |
-| `VBET_CAPTURE_SWARM_WAIT_S` | `60` | Attente cookie Swarm |
-| `PORT` | `8003` | Port serveur |
+| `VBET_SITE_ID` | `277` | Site ID Swarm vbet.fr |
+| `VBET_SESSION_JSON_B64` | *(base64 de data/vbet_session.json)* | Session Swarm |
+| `VBET_INGEST_TOKEN` | *(secret)* | Auth Bearer pour POST /session |
+| `VBET_FETCH_COOLDOWN_S` | `1` | Délai entre cycles fetch |
+| `VBET_FETCH_MODE` | `full` | `menu` / `prematch` / `full` |
+
+### Pousser une nouvelle session
+
+```bash
+VBET_INGEST_TOKEN=xxx ./scripts/push_session.sh https://vbet-production.up.railway.app
+```
