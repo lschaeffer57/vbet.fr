@@ -3,8 +3,6 @@
 ms-playwright/
 __pycache__/
 *.pyc
-data/vbet_session.json
-data/vbet_odds_cache.json
-data/vbet_playwright_profile/
-data/vbet_storage_state_b64.txt
+data/
 output.json
+.env
