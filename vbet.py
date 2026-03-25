@@ -1260,11 +1260,13 @@ def cmd_serve(_a=None):
     import threading
     import uvicorn
     from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+    from fastapi.middleware.gzip import GZipMiddleware
     from pydantic import BaseModel, ConfigDict, Field
 
     cf       = Path(os.getenv("VBET_ODDS_CACHE_FILE", str(CACHE)))
     out_flat = Path(os.getenv("VBET_OUT_FLAT", str(BASE / "output.json")))
     app      = FastAPI(title="Vbet")
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
     _session_refresh_lock    = threading.Lock()
     _session_refresh_running = False
     _fetch_lock    = threading.Lock()
@@ -1296,8 +1298,25 @@ def cmd_serve(_a=None):
             raise HTTPException(500, str(e)) from e
 
     @app.get("/odds")
-    def odds():
-        return load()
+    def odds(sport: str | None = None):
+        data = load()
+        if sport:
+            sports = data.get("sports", {})
+            matched = {k: v for k, v in sports.items() if sport.lower() in k.lower()}
+            if not matched:
+                raise HTTPException(404, f"Sport '{sport}' introuvable. Disponibles: {list(sports.keys())}")
+            return {"generated_at": data.get("generated_at"), "sports": matched}
+        return data
+
+    @app.get("/odds/sports")
+    def odds_sports():
+        data = load()
+        return {
+            "sports": [
+                {"name": k, "total_rows": v["total_rows"], "total_matches": v["total_matches"]}
+                for k, v in data.get("sports", {}).items()
+            ]
+        }
 
     @app.get("/health")
     def health():
