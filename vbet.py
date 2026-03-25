@@ -1425,6 +1425,9 @@ def cmd_serve(_a=None):
 
     has_creds = bool(
         (os.environ.get("VBET_STORAGE_STATE_B64") or "").strip()
+        or (os.environ.get("VBET_SESSION_JSON_B64") or "").strip()
+        or (os.environ.get("VBET_SESSION_JSON")    or "").strip()
+        or (os.environ.get("VBET_COOKIE")          or "").strip()
         or (
             (os.environ.get("VBET_USERNAME") or "").strip()
             and (os.environ.get("VBET_PASSWORD") or "").strip()
