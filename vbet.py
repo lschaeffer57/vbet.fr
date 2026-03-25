@@ -1526,8 +1526,11 @@ def cmd_serve(_a=None):
                     delay_s=float(os.environ.get("VBET_FETCH_DELAY_S", "0")),
                 )
                 raw       = _read_cache(cf)
-                processed = build_downloads(_swarm_rows(raw, spec_only=False))
+                spec_only = os.environ.get("VBET_SERVE_SPEC_ONLY", "1").strip().lower() not in ("0", "false", "no")
+                processed = build_downloads(_swarm_rows(raw, spec_only=spec_only))
                 _write_json(out_flat, processed)
+                n = sum(s["total_rows"] for s in processed.get("sports", {}).values())
+                print(f"[vbet serve] auto-fetch: {n} cotes → {out_flat}", flush=True)
             except (MissingSwarmCookieError, SwarmSessionRejected) as e:
                 print(f"[vbet serve] auto-fetch: session KO — {e}", file=sys.stderr)
                 if has_creds:
